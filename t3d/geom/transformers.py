@@ -18,12 +18,6 @@ class Transformer(ABC):
         pass
 
 
-def _tensorify(vals):
-    if not torch.is_tensor(vals):
-        return torch.DoubleTensor(vals)
-    return vals.double()
-
-
 class CameraTransformer(Transformer):
     def __init__(self):
         super().__init__()
@@ -34,9 +28,9 @@ class CameraTransformer(Transformer):
     def _mul_affine(self, matrix, A=None, t=None):
         aff = torch.eye(3).double()
         if A is not None:
-            aff[0:2, 0:2].copy_(_tensorify(A))
+            aff[0:2, 0:2].copy_(torch.as_tensor(A, dtype=torch.float64))
         if t is not None:
-            aff[0:2, 2].copy_(_tensorify(t))
+            aff[0:2, 2].copy_(torch.as_tensor(t, dtype=torch.float64))
         return torch.mm(aff, matrix)
 
     def affine(self, A=None, t=None):
@@ -132,9 +126,9 @@ class ImageTransformer(Transformer):
     def _mul_affine(self, matrix, A=None, t=None):
         aff = torch.eye(3).double()
         if A is not None:
-            aff[0:2, 0:2].copy_(_tensorify(A))
+            aff[0:2, 0:2].copy_(torch.as_tensor(A, dtype=torch.float64))
         if t is not None:
-            aff[0:2, 2].copy_(_tensorify(t))
+            aff[0:2, 2].copy_(torch.as_tensor(t, dtype=torch.float64))
         return torch.mm(aff, matrix)
 
     def affine(self, A=None, t=None):
@@ -232,9 +226,9 @@ class PointTransformer(Transformer):
     def affine(self, A=None, t=None):
         aff = torch.eye(4).double()
         if A is not None:
-            aff[0:3, 0:3].copy_(_tensorify(A))
+            aff[0:3, 0:3].copy_(torch.as_tensor(A, dtype=torch.float64))
         if t is not None:
-            aff[0:3, 3].copy_(_tensorify(t))
+            aff[0:3, 3].copy_(torch.as_tensor(t, dtype=torch.float64))
         self.matrix = torch.mm(aff, self.matrix)
 
     def rotate(self, axis, theta):
@@ -298,13 +292,10 @@ class TransformerContext:
         if image:
             transform.add_image_transform(self)
 
-    def _apply_transforms(self, obj, transformer):
-        if obj is None:
-            return obj
-        return transformer.transform(obj)
-
     def transform(self, camera=None, image=None, points=None):
-        new_camera = self._apply_transforms(camera, self.camera_transformer)
-        new_image = self._apply_transforms(image, self.image_transformer)
-        new_points = self._apply_transforms(points, self.point_transformer)
-        return (new_camera, new_image, new_points)
+        pairs = [
+            (camera, self.camera_transformer),
+            (image, self.image_transformer),
+            (points, self.point_transformer),
+        ]
+        return tuple([t.transform(obj) if obj is not None else None for obj, t in pairs])
