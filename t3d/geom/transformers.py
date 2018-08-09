@@ -2,9 +2,8 @@ import torch
 from torchvision.transforms.functional import adjust_hue
 from PIL import Image, ImageEnhance
 from abc import ABC, abstractmethod
-import math
 
-from . import ensure_homogeneous
+from . import ensure_homogeneous, mat3
 from .camera import CameraIntrinsics
 
 
@@ -18,29 +17,28 @@ class Transformer(ABC):
         pass
 
 
-class CameraTransformer(Transformer):
-    def __init__(self):
+class MatrixBasedTransformer(Transformer):
+    def __init__(self, matrix):
         super().__init__()
-        self.matrix = torch.eye(3).double()
+        self.matrix = matrix
+
+    def _mm(self, a, b):
+        a = torch.as_tensor(a, dtype=self.matrix.dtype)
+        b = torch.as_tensor(b, dtype=self.matrix.dtype)
+        return torch.mm(a, b)
+
+    def mm(self, other):
+        self.matrix = self._mm(other, self.matrix)
+
+
+class CameraTransformer(MatrixBasedTransformer):
+    def __init__(self):
+        super().__init__(torch.eye(3, dtype=torch.float64))
         self.sx = 1
         self.sy = 1
 
-    def _mul_affine(self, matrix, A=None, t=None):
-        aff = torch.eye(3).double()
-        if A is not None:
-            aff[0:2, 0:2].copy_(torch.as_tensor(A, dtype=torch.float64))
-        if t is not None:
-            aff[0:2, 2].copy_(torch.as_tensor(t, dtype=torch.float64))
-        return torch.mm(aff, matrix)
-
-    def affine(self, A=None, t=None):
-        self.matrix = self._mul_affine(self.matrix, A, t)
-
-    def scale_image(self, sx, sy):
-        self.affine(
-            A=[[sx,  0],
-               [ 0, sy]]
-        )
+    def zoom(self, sx, sy):
+        self.mm(mat3.stretch(sx, sy))
         self.sx *= sx
         self.sy *= sy
 
@@ -61,28 +59,7 @@ class CameraTransformer(Transformer):
         return camera
 
 
-def affine_warp(image: Image.Image, matrix, output_size):
-    """Apply an affine transformation to the image.
-
-    Args:
-        image (Image.Image): The input image to transform
-        matrix (torch.DoubleTensor): The affine transformation matrix
-        output_size (tuple of int): The size of the output image
-
-    Returns:
-        The transformed image
-    """
-    inv_matrix = matrix.inverse().contiguous()
-    image = image.transform(
-        output_size,
-        Image.AFFINE,
-        tuple(inv_matrix[0:2].view(6)),
-        Image.BILINEAR
-    )
-    return image
-
-
-class ImageTransformer(Transformer):
+class ImageTransformer(MatrixBasedTransformer):
     """Image transformer.
 
     Args:
@@ -92,9 +69,8 @@ class ImageTransformer(Transformer):
     """
 
     def __init__(self, width, height, x0, y0, msaa=1):
-        super().__init__()
+        super().__init__(torch.eye(3, dtype=torch.float64))
         self.msaa = msaa
-        self.matrix = torch.eye(3).double()
         self.dest_size = torch.DoubleTensor([width, height])
         self.orig_width = width
         self.orig_height = height
@@ -117,45 +93,9 @@ class ImageTransformer(Transformer):
         self.saturation = saturation
         self.hue = hue
 
-    def hflip(self):
-        self.affine(
-            A=[[-1, 0],
-               [ 0, 1]]
-        )
-
-    def _mul_affine(self, matrix, A=None, t=None):
-        aff = torch.eye(3).double()
-        if A is not None:
-            aff[0:2, 0:2].copy_(torch.as_tensor(A, dtype=torch.float64))
-        if t is not None:
-            aff[0:2, 2].copy_(torch.as_tensor(t, dtype=torch.float64))
-        return torch.mm(aff, matrix)
-
-    def affine(self, A=None, t=None):
-        self.matrix = self._mul_affine(self.matrix, A, t)
-
-    def translate(self, x, y):
-        self.affine(t=[x, y])
-
-    def rotate(self, radians):
-        """Rotate the image counter clockwise."""
-        self.affine(
-            A=[[ math.cos(radians), math.sin(radians)],
-               [-math.sin(radians), math.cos(radians)]],
-        )
-
-    def zoom(self, sx, sy=None):
-        sy = sx if sy is None else sy
-        self.affine(
-            A=[[sx,  0],
-               [ 0, sy]]
-        )
-
-    def resize(self, width, height):
-        new_dest_size = torch.DoubleTensor([width, height])
-        scale = new_dest_size / self.dest_size
-        self.dest_size = new_dest_size
-        self.zoom(scale[0], scale[1])
+    def set_output_size(self, width, height):
+        self.dest_size = self.dest_size.new([width, height])
+        return self.dest_size
 
     def _transform_colour(self, image):
         enhancers = [
@@ -183,7 +123,7 @@ class ImageTransformer(Transformer):
 
         # Restore principle point
         ow, oh = self.dest_size.tolist()
-        matrix = self._mul_affine(matrix, t=[self.x0 * ow / self.orig_width, self.y0 * oh / self.orig_height])
+        matrix = self._mm(mat3.translate(self.x0 * ow / self.orig_width, self.y0 * oh / self.orig_height), matrix)
 
         output_size = self.dest_size.round().int()
         if inverse:
@@ -191,16 +131,16 @@ class ImageTransformer(Transformer):
             output_size = torch.IntTensor([self.orig_width, self.orig_height])
 
         # Scale up
-        if self.msaa != 1:
-            matrix = self._mul_affine(
-                matrix,
-                A=[[self.msaa,         0],
-                   [        0, self.msaa]]
-            )
+        matrix = self._mm(mat3.stretch(self.msaa), matrix)
 
-        # Apply image transformation
-        trans_output_size = tuple(output_size * self.msaa)
-        image = affine_warp(image, matrix, trans_output_size)
+        # Apply affine image transformation
+        inv_matrix = matrix.inverse().contiguous()
+        image = image.transform(
+            tuple(output_size * self.msaa),
+            Image.AFFINE,
+            tuple(inv_matrix[0:2].view(6)),
+            Image.BILINEAR
+        )
 
         # Scale down to output size
         if self.msaa != 1:
@@ -217,10 +157,9 @@ class ImageTransformer(Transformer):
         return self._transform_image(image, inverse=True)
 
 
-class PointTransformer(Transformer):
+class PointTransformer(MatrixBasedTransformer):
     def __init__(self):
-        super().__init__()
-        self.matrix = torch.eye(4).double()
+        super().__init__(torch.eye(4, dtype=torch.float64))
         self.shuffle_indices = []
 
     def affine(self, A=None, t=None):
@@ -230,18 +169,6 @@ class PointTransformer(Transformer):
         if t is not None:
             aff[0:3, 3].copy_(torch.as_tensor(t, dtype=torch.float64))
         self.matrix = torch.mm(aff, self.matrix)
-
-    def rotate(self, axis, theta):
-        axis = axis[:3]
-        axis = axis / axis.norm(2)
-        ux, uy, uz = list(axis)
-        cos = math.cos(theta)
-        sin = math.sin(theta)
-        self.affine(
-            A=[[cos + ux*ux*(1 - cos),  ux*uy*(1-cos) - uz*sin, ux*uz*(1-cos) + uy*sin],
-               [uy*ux*(1-cos) + uz*sin, cos + uy*uy*(1-cos),    uy*uz*(1-cos) - ux*sin],
-               [uz*ux*(1-cos) - uy*sin, uz*uy*(1-cos) + ux*sin, cos + uz*uz*(1-cos)]]
-        )
 
     def is_similarity(self):
         """Check whether the matrix represents a similarity transformation.
