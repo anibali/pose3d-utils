@@ -5,19 +5,19 @@ import numpy as np
 import torch
 from importlib_resources import open_text
 
-from t3d.geom.camera import CameraIntrinsics
-from t3d.skeleton_normaliser import SkeletonNormaliser
-from t3d.skeleton import MPI3D_SKELETON_DESC
-from t3d.geom import ensure_homogeneous
+from pose3d_utils.camera import CameraIntrinsics
+from pose3d_utils.coords import ensure_homogeneous
+from pose3d_utils.skeleton import MPI3D_SKELETON_DESC
+from pose3d_utils.skeleton_normaliser import SkeletonNormaliser
 
 
 class TestNormaliser(unittest.TestCase):
     def setUp(self):
-        with open_text('t3d.res', 'example01_camera.json') as f:
+        with open_text('tests.data', 'example01_camera.json') as f:
             camera_params = json.load(f)
             self.camera = CameraIntrinsics(torch.tensor(camera_params['intrinsic'])[:3])
 
-        with open_text('t3d.res', 'example01_univ_annot3.txt') as f:
+        with open_text('tests.data', 'example01_univ_annot3.txt') as f:
             self.points = torch.as_tensor(np.loadtxt(f))
 
         self.z_ref = 3992.29

@@ -1,10 +1,10 @@
 import unittest
 
-import torch
 import numpy as np
+import torch
 
-from t3d.geom.camera import CameraIntrinsics
-from t3d.geom import homogeneous_to_cartesian
+from pose3d_utils.camera import CameraIntrinsics
+from pose3d_utils.coords import homogeneous_to_cartesian
 
 
 class TestCameraIntrinsics(unittest.TestCase):

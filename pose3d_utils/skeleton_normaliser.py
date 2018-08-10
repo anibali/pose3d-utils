@@ -1,8 +1,8 @@
 import torch
-from scipy import optimize
 from math import sqrt
+from scipy import optimize
 
-from t3d.geom.camera import CameraIntrinsics
+from pose3d_utils.camera import CameraIntrinsics
 
 
 def make_projection_matrix(z_ref, intrinsics, height, width):

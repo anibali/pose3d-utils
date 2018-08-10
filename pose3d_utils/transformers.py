@@ -1,10 +1,12 @@
-import torch
-from torchvision.transforms.functional import adjust_hue
-from PIL import Image, ImageEnhance
 from abc import ABC, abstractmethod
 
-from . import ensure_homogeneous, mat3
-from .camera import CameraIntrinsics
+import torch
+from PIL import Image, ImageEnhance
+from torchvision.transforms.functional import adjust_hue
+
+from pose3d_utils import mat3
+from pose3d_utils.camera import CameraIntrinsics
+from pose3d_utils.coords import ensure_homogeneous
 
 
 class Transformer(ABC):
@@ -123,7 +125,8 @@ class ImageTransformer(MatrixBasedTransformer):
 
         # Restore principle point
         ow, oh = self.dest_size.tolist()
-        matrix = self._mm(mat3.translate(self.x0 * ow / self.orig_width, self.y0 * oh / self.orig_height), matrix)
+        matrix = self._mm(
+            mat3.translate(self.x0 * ow / self.orig_width, self.y0 * oh / self.orig_height), matrix)
 
         output_size = self.dest_size.round().int()
         if inverse:

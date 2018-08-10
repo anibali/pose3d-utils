@@ -1,6 +1,6 @@
 import torch
 
-from . import ensure_homogeneous, ensure_cartesian
+from pose3d_utils.coords import ensure_homogeneous, ensure_cartesian
 
 
 class CameraIntrinsics():

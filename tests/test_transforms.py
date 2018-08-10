@@ -6,22 +6,22 @@ import numpy as np
 import torch
 from importlib_resources import open_binary, open_text
 
-import t3d.geom.transforms as transforms
-from t3d.geom.camera import CameraIntrinsics
-from t3d.geom.transformers import TransformerContext
-from t3d.skeleton import CANONICAL_SKELETON_DESC
+import pose3d_utils.transforms as transforms
+from pose3d_utils.camera import CameraIntrinsics
+from pose3d_utils.skeleton import CANONICAL_SKELETON_DESC
+from pose3d_utils.transformers import TransformerContext
 
 
 class TestTransforms(unittest.TestCase):
     def setUp(self):
-        with open_binary('t3d.res', 'example02_image.jpg') as f:
+        with open_binary('tests.data', 'example02_image.jpg') as f:
             self.image: PIL.Image.Image = PIL.Image.open(f).copy()
 
-        with open_text('t3d.res', 'example02_camera.json') as f:
+        with open_text('tests.data', 'example02_camera.json') as f:
             camera_params = json.load(f)
             self.camera = CameraIntrinsics(torch.tensor(camera_params['intrinsic'])[:3])
 
-        with open_text('t3d.res', 'example02_univ_annot3.txt') as f:
+        with open_text('tests.data', 'example02_univ_annot3.txt') as f:
             self.points = torch.as_tensor(np.loadtxt(f))
 
     def assert_synced(self, camera, image, points):
