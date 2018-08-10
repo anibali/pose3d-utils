@@ -1,16 +1,35 @@
 class SkeletonDesc:
     def __init__(self, joint_names, joint_tree, hflip_indices):
+        """Description of a particular skeleton representation.
+
+        Args:
+            joint_names (list of str): Names of the joints.
+            joint_tree (list of int): References to the parent of each joint.
+            hflip_indices (list of int): References to the horizontal mirror of each joint.
+        """
         self.joint_names = joint_names
         self.joint_tree = joint_tree
         self.hflip_indices = hflip_indices
 
     @property
     def n_joints(self):
+        """The number of joints in the skeleton."""
         return len(self.joint_names)
 
     @property
     def root_joint_id(self):
+        """The ID (index) of the root joint."""
         return self.joint_names.index('pelvis')
+
+    def get_joint_metadata(self, joint_id):
+        name = self.joint_names[joint_id]
+        if name.startswith('left_'):
+            group = 'left'
+        elif name.startswith('right_'):
+            group = 'right'
+        else:
+            group = 'centre'
+        return dict(parent=self.joint_tree[joint_id], group=group)
 
 
 MPI3D_SKELETON_DESC = SkeletonDesc(
