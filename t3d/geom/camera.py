@@ -1,20 +1,6 @@
 import torch
-from torch.autograd import Variable
 
 from . import ensure_homogeneous, ensure_cartesian
-
-
-def _pinv(matrix):
-    """Calculate the Moore-Penrose inverse."""
-    u, s, v = torch.svd(matrix, some=True)
-    s = 1 / s  # FIXME: Possible divide by zero. See NumPy implementation for workaround.
-    return torch.matmul(v, s.unsqueeze(-1) * u.t())
-
-
-def _type_as(t, other):
-    if isinstance(other, Variable):
-        t = Variable(t, requires_grad=False)
-    return t.type_as(other)
 
 
 class CameraIntrinsics():
@@ -95,7 +81,7 @@ class CameraIntrinsics():
     def project(self, coords):
         """Project points from camera space to image space."""
         assert coords.size(-1) == 4, 'expected homogeneous coordinates in 3D space'
-        return torch.matmul(coords, _type_as(self.matrix.t(), coords))
+        return torch.matmul(coords, self.matrix.t().type_as(coords))
 
     def project_cartesian(self, coords):
         coords = ensure_homogeneous(coords, d=3)
@@ -104,4 +90,4 @@ class CameraIntrinsics():
     def back_project(self, coords):
         """Project points from image space to camera space (ideal points)."""
         assert coords.size(-1) == 3, 'expected homogeneous coordinates in 2D space'
-        return torch.matmul(coords, _type_as(_pinv(self.matrix).t(), coords))
+        return torch.matmul(coords, torch.pinverse(self.matrix).t().type_as(coords))
