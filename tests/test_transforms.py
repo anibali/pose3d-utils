@@ -34,12 +34,13 @@ class TestTransforms(unittest.TestCase):
         points2d = self.camera.project_cartesian(self.points)
         points2d_t = camera.project_cartesian(points)
 
+        n_points = len(points2d)
         loss = 0
-        for i in range(28):
-            expected = torch.as_tensor(self.image.getpixel(tuple(points2d[0].tolist())), dtype=torch.float32)
-            actual = torch.as_tensor(image.getpixel(tuple(points2d_t[0].tolist())), dtype=torch.float32)
+        for i in range(n_points):
+            expected = torch.as_tensor(self.image.getpixel(tuple(points2d[i].tolist())), dtype=torch.float32)
+            actual = torch.as_tensor(image.getpixel(tuple(points2d_t[i].tolist())), dtype=torch.float32)
             loss += torch.dist(expected, actual).item()
-        loss /= 28
+        loss /= n_points
 
         self.assertAlmostEqual(loss, 0, delta=5.0)
 
@@ -71,8 +72,8 @@ class TestTransforms(unittest.TestCase):
         ctx = TransformerContext(self.camera, self.image.width, self.image.height, msaa=1)
         ctx.add(transforms.HorizontalFlip(CANONICAL_SKELETON_DESC.hflip_indices, True))
 
-        transformed = ctx.transform(self.camera, self.image, self.points)
-        self.assert_synced(*transformed)
+        tcamera, timage, tpoints = ctx.transform(self.camera, self.image, self.points)
+        self.assert_synced(tcamera, timage, tpoints[CANONICAL_SKELETON_DESC.hflip_indices])
         self.assert_transform_equality(ctx)
 
     def test_rotate(self):

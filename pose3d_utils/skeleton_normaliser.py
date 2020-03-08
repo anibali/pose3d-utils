@@ -116,7 +116,7 @@ class SkeletonNormaliser:
         m_proj = make_projection_matrix(z_ref, intrinsics, height, width).type_as(norm_skel)
         return ndc_to_camera_space(norm_skel, m_proj)
 
-    def infer_depth(self, norm_skel, eval_scale, intrinsics, height, width):
+    def infer_depth(self, norm_skel, eval_scale, intrinsics, height, width, z_upper=20000):
         """Infer the depth of the root joint.
 
         Args:
@@ -125,6 +125,7 @@ class SkeletonNormaliser:
             intrinsics (CameraIntrinsics): The camera which projects 3D points onto the 2D image.
             height (float): The image height.
             width (float): The image width.
+            z_upper (float): Upper bound for depth.
 
         Returns:
             float: `z_ref`, the depth of the root joint.
@@ -135,6 +136,5 @@ class SkeletonNormaliser:
             k = eval_scale(skel)
             return (k - 1.0) ** 2
         z_lower = max(intrinsics.alpha_x, intrinsics.alpha_y)
-        z_upper = 10000
         z_ref = float(optimize.fminbound(f, z_lower, z_upper, maxfun=200, disp=0))
         return z_ref
