@@ -1,0 +1,9 @@
+name: pose3d-utils
+channels:
+  - pytorch
+dependencies:
+  - python=3.6
+  - cuda92=1.0
+  - magma-cuda92=2.3.0
+  - "pytorch=0.4.1=py36_cuda9.2.148_cudnn7.1.4_1"
+  - torchvision=0.2.1
